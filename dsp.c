@@ -324,7 +324,7 @@ void core1_main()
 
         end_display_time = time_us_32();
 
-        // to draw db lines
+        // to draw db reference lines
         for (int i = 0; i < 5; i++)
         {
             lcd_draw_line(offset - 1, (SCREEN_HEIGHT / 6) * (i + 1), SCREEN_WIDTH, (SCREEN_HEIGHT / 6) * (i + 1), COLOR_LINE);
