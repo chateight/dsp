@@ -219,7 +219,7 @@ int main()
         filter_and_downsample();
         fft_exec();
         // LCD refresh is sampling mode
-        if ((disp_index % FRAME_RATE) == 0 && disp_index < FRAME_RATE)
+        if ((disp_index % FRAME_RATE) == 0)
         {
             disp_index = 0;
 
