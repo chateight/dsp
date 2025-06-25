@@ -1,6 +1,6 @@
 /* See https://m0agx.eu/practical-fft-on-microcontrollers-using-cmsis-dsp.html */
 //
-// CPU read ADC data version 
+// CPU reads ADC data version 
 //
 #include <math.h>
 #include <stdio.h>
@@ -9,10 +9,10 @@
 #include "pico/time.h"
 #include "hardware/sync.h"
 
-// For ADC input & IRQ:
+// For ADC input
 #include "hardware/adc.h"
-#include "hardware/dma.h"
-#include "hardware/irq.h"
+#include "hardware/dma.h"   // not in use
+#include "hardware/irq.h"   // not in use
 
 // use multi core
 #include "pico/multicore.h"
@@ -22,7 +22,7 @@
 #include "hardware/pwm.h"
 // on board LED
 #include "pico/cyw43_arch.h"
-// LCD library
+// LCD display control library
 #include "lcd_st7789_library.h"
 
 void core1_main();
@@ -32,7 +32,7 @@ void core1_main();
 // Channel 0 is GPIO26 for ADC sampling
 #define CAPTURE_CHANNEL 0
 
-int dma_chan;
+int dma_chan;   // not in use
 
 uint32_t start_adc_time;
 uint32_t start_preprocess_time;
@@ -50,12 +50,12 @@ arm_rfft_instance_q15 fft_instance;
 #define RAW_SAMPLES 2560 * 2
 #define DOWNSAMPLED 256 * 2
 #define DECIMATE_N 10
-#define ADC_CLKDIV 96.0f // 50Ksps
+#define ADC_CLKDIV 96.0f // 50Ksps : not applicable
 
 uint16_t capture_buf[RAW_SAMPLES];
 q15_t filtered_downsampled[DOWNSAMPLED];
 
-// FFT結果（dB変換後の値）
+// FFT結果（dB変換後の値 : dual buffer for display control）
 // Core0が更新する。Core1は読み取りのみ
 volatile int16_t fft_result[2][FFT_SIZE / 2];
 volatile int non_active_index = 0;
