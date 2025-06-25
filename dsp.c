@@ -1,6 +1,6 @@
 /* See https://m0agx.eu/practical-fft-on-microcontrollers-using-cmsis-dsp.html */
 //
-// DMA transfer & interrupt handling version
+// CPU read ADC data version 
 //
 #include <math.h>
 #include <stdio.h>
