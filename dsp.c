@@ -45,7 +45,7 @@ q15_t mag_squared[FFT_SIZE];    // パワースペクトル（Q13形式）
 q15_t hann_window[FFT_SIZE];
 arm_rfft_instance_q15 fft_instance;
 
-#define FRAME_RATE 20
+#define FRAME_RATE 10
 
 #define RAW_SAMPLES 2560 * 2
 #define DOWNSAMPLED 256 * 2
@@ -311,7 +311,7 @@ void core1_main()
         uint32_t data = multicore_fifo_pop_blocking();
 
         next = 1 - non_active_index;
-        // move fft data to the display buffer
+        // to move fft data to the display buffer
         for (int i = 0; i < FFT_SIZE / 2; i++)
         {
             fft_result[next][i] = ffft_result_tmp[i];
@@ -324,6 +324,7 @@ void core1_main()
 
         end_display_time = time_us_32();
 
+        // to draw db lines
         for (int i = 0; i < 5; i++)
         {
             lcd_draw_line(offset - 1, (SCREEN_HEIGHT / 6) * (i + 1), SCREEN_WIDTH, (SCREEN_HEIGHT / 6) * (i + 1), COLOR_LINE);
