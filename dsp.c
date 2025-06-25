@@ -1,6 +1,6 @@
 /* See https://m0agx.eu/practical-fft-on-microcontrollers-using-cmsis-dsp.html */
 //
-// CPU reads ADC data version 
+// CPU reads ADC data version
 //
 #include <math.h>
 #include <stdio.h>
@@ -11,8 +11,8 @@
 
 // For ADC input
 #include "hardware/adc.h"
-#include "hardware/dma.h"   // not in use
-#include "hardware/irq.h"   // not in use
+#include "hardware/dma.h" // not in use
+#include "hardware/irq.h" // not in use
 
 // use multi core
 #include "pico/multicore.h"
@@ -32,7 +32,7 @@ void core1_main();
 // Channel 0 is GPIO26 for ADC sampling
 #define CAPTURE_CHANNEL 0
 
-int dma_chan;   // not in use
+int dma_chan; // not in use
 
 uint32_t start_adc_time;
 uint32_t start_preprocess_time;
@@ -57,6 +57,7 @@ q15_t filtered_downsampled[DOWNSAMPLED];
 
 // FFT結果（dB変換後の値 : dual buffer for display control）
 // Core0が更新する。Core1は読み取りのみ
+int16_t ffft_result_tmp[FFT_SIZE / 2];
 volatile int16_t fft_result[2][FFT_SIZE / 2];
 volatile int non_active_index = 0;
 volatile int next = 0;
@@ -144,16 +145,13 @@ void fft_exec()
 
     float q13_to_float = 1.0f / 8192.0f; // Q13 → float
 
-    // change the dual buffer active one
-    int next = 1 - non_active_index;
-
     for (uint32_t j = 0; j < FFT_SIZE / 2; j++)
     {
         float mag_q13 = (float)mag_squared[j] * q13_to_float;
         float mag_corr = mag_q13 * hann_correction; // Hanning補正（約2倍）
 
         float voltage_rms = sqrtf(mag_corr);
-        fft_result[next][j] = (int)20.0f * log10f(voltage_rms + 1e-6f);
+        ffft_result_tmp[j] = (int)20.0f * log10f(voltage_rms + 1e-6f);
     }
 
     end_fft_time = time_us_32();
@@ -185,12 +183,13 @@ int main()
     cyw43_arch_gpio_put(CYW43_WL_GPIO_LED_PIN, 1);
 
     sleep_ms(1000);
+    multicore_launch_core1(core1_main);
+    sleep_ms(1000);
 
     setup_pwm();
 
     // display buffer initialize
     memset((void *)fft_result, 0, sizeof(fft_result));
-    multicore_launch_core1(core1_main);
 
     // to prepare Hanning window coefficient
     for (int n = 0; n < FFT_SIZE; n++)
@@ -217,14 +216,12 @@ int main()
 
         adc_run(false);
         filter_and_downsample();
-        fft_exec();
-        // LCD refresh is sampling mode
+        // fft_exec();
+        //  LCD refresh is a sampling mode
         if ((disp_index % FRAME_RATE) == 0)
         {
+            fft_exec();
             disp_index = 0;
-
-            // 結果バッファー(fft_result)を切り替え
-            non_active_index = next;
 
             // notify that the display data is available
             uint32_t message = 9999;
@@ -253,6 +250,7 @@ int main()
 #define DB_MAX 0
 #define COLOR_BG create_color(0, 0, 0)
 #define COLOR_FG create_color(255, 255, 255)
+#define COLOR_LINE create_color(0, 0, 255)
 
 int offset = 64;
 int char_offset = 20;
@@ -306,13 +304,29 @@ void core1_main()
     lcd_draw_text(0, 230, "<0~25KHz>", COLOR_FG, COLOR_BG, 1);
 
     lcd_draw_line(offset - 1, 0, offset - 1, SCREEN_HEIGHT - 1, COLOR_FG);
+    lcd_draw_line(offset - 1, SCREEN_HEIGHT - 1, SCREEN_WIDTH, SCREEN_HEIGHT - 1, COLOR_FG);
 
     while (1)
     {
         uint32_t data = multicore_fifo_pop_blocking();
 
+        next = 1 - non_active_index;
+        // move fft data to the display buffer
+        for (int i = 0; i < FFT_SIZE / 2; i++)
+        {
+            fft_result[next][i] = ffft_result_tmp[i];
+        }
+
         draw_fft_graph();
 
+        // change the dual buffer active one
+        non_active_index = next;
+
         end_display_time = time_us_32();
+
+        for (int i = 0; i < 5; i++)
+        {
+            lcd_draw_line(offset - 1, (SCREEN_HEIGHT / 6) * (i + 1), SCREEN_WIDTH, (SCREEN_HEIGHT / 6) * (i + 1), COLOR_LINE);
+        }
     }
 }
