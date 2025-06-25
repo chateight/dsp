@@ -93,7 +93,6 @@ target_include_directories(lcd_driver PRIVATE
     ${CMAKE_CURRENT_LIST_DIR}
     ${PICO_SDK_PATH}/src/common
     ${PICO_SDK_PATH}/src/rp2
-    lcd_driver
 )
 
 pico_add_extra_outputs(dsp)

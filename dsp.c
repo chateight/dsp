@@ -292,7 +292,7 @@ void core1_main()
     sleep_ms(500);
     // Initialize the LCD
     lcd_init();
-
+    // to draw the display format
     lcd_fill_color(COLOR_BG);
 
     lcd_draw_text(char_offset + 10, 0, "0db", COLOR_FG, COLOR_BG, 1);
