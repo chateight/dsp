@@ -22,7 +22,7 @@
 
 // SPI configuration
 #define SPI_PORT spi0
-#define SPI_BAUDRATE 40000000  // 20 MHz SPI clock
+#define SPI_BAUDRATE 40000000  // 40 MHz SPI clock
 
 // Function prototypes for internal use
 static void lcd_write_command(uint8_t cmd);
