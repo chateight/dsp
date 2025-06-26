@@ -300,7 +300,7 @@ void core1_main()
     lcd_draw_text(char_offset, 160, "-80db", COLOR_FG, COLOR_BG, 1);
     lcd_draw_text(char_offset - 5, 200, "-100db", COLOR_FG, COLOR_BG, 1);
     lcd_draw_text(0, 230, "<0~25KHz>", COLOR_FG, COLOR_BG, 1);
-
+    // X/Y line
     lcd_draw_line(offset - 1, 0, offset - 1, SCREEN_HEIGHT - 1, COLOR_FG);
     lcd_draw_line(offset - 1, SCREEN_HEIGHT - 1, SCREEN_WIDTH, SCREEN_HEIGHT - 1, COLOR_FG);
 
