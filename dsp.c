@@ -28,6 +28,11 @@
 void core1_main();
 
 #define FFT_SIZE 256 * 2
+#define FRAME_RATE 10
+#define RAW_SAMPLES 2560 * 2
+#define DOWNSAMPLED 256 * 2
+#define DECIMATE_N 10
+#define ADC_CLKDIV 96.0f // 50Ksps : not applicable
 
 // Channel 0 is GPIO26 for ADC sampling
 #define CAPTURE_CHANNEL 0
@@ -44,13 +49,6 @@ q15_t fft_output[FFT_SIZE * 2]; // 出力（複素数 interleaved）
 q15_t mag_squared[FFT_SIZE];    // パワースペクトル（Q13形式）
 q15_t hann_window[FFT_SIZE];
 arm_rfft_instance_q15 fft_instance;
-
-#define FRAME_RATE 10
-
-#define RAW_SAMPLES 2560 * 2
-#define DOWNSAMPLED 256 * 2
-#define DECIMATE_N 10
-#define ADC_CLKDIV 96.0f // 50Ksps : not applicable
 
 uint16_t capture_buf[RAW_SAMPLES];
 q15_t filtered_downsampled[DOWNSAMPLED];
@@ -122,7 +120,7 @@ void adc_initialize()
         false, // ERR無視
         false  // 12bitデータをそのまま
     );
-    //adc_set_clkdiv(ADC_CLKDIV);
+    // adc_set_clkdiv(ADC_CLKDIV);
 }
 
 // to apply Hann window & call FFT/Power calc
@@ -216,7 +214,7 @@ int main()
 
         adc_run(false);
         filter_and_downsample();
-        // fft_exec();
+
         //  LCD refresh is a sampling mode
         if ((disp_index % FRAME_RATE) == 0)
         {
@@ -232,7 +230,7 @@ int main()
             disp_index++;
         }
     }
-    // wait forever
+    // wait forever(doesn't reach here)
     __wfi();
 
     //__BKPT(1);
@@ -294,7 +292,7 @@ void core1_main()
     lcd_init();
     // to draw the display format
     lcd_fill_color(COLOR_BG);
-
+    // print level guide
     lcd_draw_text(char_offset + 10, 0, "0db", COLOR_FG, COLOR_BG, 1);
     lcd_draw_text(char_offset, 40, "-20db", COLOR_FG, COLOR_BG, 1);
     lcd_draw_text(char_offset, 80, "-40db", COLOR_FG, COLOR_BG, 1);
