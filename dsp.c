@@ -122,7 +122,7 @@ void adc_initialize()
         false, // ERR無視
         false  // 12bitデータをそのまま
     );
-    adc_set_clkdiv(ADC_CLKDIV);
+    //adc_set_clkdiv(ADC_CLKDIV);
 }
 
 // to apply Hann window & call FFT/Power calc
