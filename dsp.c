@@ -149,7 +149,7 @@ void fft_exec()
         float mag_corr = mag_q13 * hann_correction; // Hanning補正（約2倍）
 
         float voltage_rms = sqrtf(mag_corr);
-        ffft_result_tmp[j] = (int)20.0f * log10f(voltage_rms + 1e-6f);
+        ffft_result_tmp[j] = (int)20.0f * log10f(voltage_rms + 1e-5f);
     }
 
     end_fft_time = time_us_32();
@@ -242,24 +242,25 @@ int main()
 #include "lcd_st7789_library.h"
 #include "hardware/spi.h"
 
-#define SCREEN_WIDTH 320
-#define SCREEN_HEIGHT 240
-#define DB_MIN -120
+#define SCREEN_WIDTH 310  // FFT result display area
+#define SCREEN_HEIGHT 220 // FFT result display area
+#define DB_MIN -100       // floor level
 #define DB_MAX 0
 #define COLOR_BG create_color(0, 0, 0)
 #define COLOR_FG create_color(255, 255, 255)
 #define COLOR_LINE create_color(0, 0, 255)
 
-int offset = 64;
-int char_offset = 20;
-// y座標をdB値（-120～0）から画面の高さ（0～239）へマッピング（上が0）
+int hori_offset = 54;
+int char_offset = 10;
+int ver_offset = 20;
+// y座標をdB値（-100～0）から画面の高さ（20～219）へマッピング（上が20）
 int db_to_y(int db_value)
 {
     if (db_value < DB_MIN)
         db_value = DB_MIN;
     if (db_value > DB_MAX)
         db_value = DB_MAX;
-    return (int)((DB_MAX - db_value) * (SCREEN_HEIGHT - 1) / (DB_MAX - DB_MIN));
+    return (int)((DB_MAX - db_value) * (SCREEN_HEIGHT - 1 - ver_offset) / (DB_MAX - DB_MIN));
 }
 
 // FFT棒グラフの描画（差分のみ更新）
@@ -274,11 +275,11 @@ void draw_fft_graph()
         {
             //  消す（古い棒） → 黒
             if (y_old < SCREEN_HEIGHT)
-                lcd_draw_line(x + offset, y_old, x + offset, SCREEN_HEIGHT - 1, COLOR_BG);
+                lcd_draw_line(x + hori_offset, y_old + ver_offset, x + hori_offset, SCREEN_HEIGHT - 1, COLOR_BG);
 
             // 描く（新しい棒） → 白
             if (y_new < SCREEN_HEIGHT)
-                lcd_draw_line(x + offset, y_new, x + offset, SCREEN_HEIGHT - 1, COLOR_FG);
+                lcd_draw_line(x + hori_offset, y_new + ver_offset, x + hori_offset, SCREEN_HEIGHT - 1, COLOR_FG);
         }
     }
 }
@@ -293,16 +294,17 @@ void core1_main()
     // to draw the display format
     lcd_fill_color(COLOR_BG);
     // print level guide
-    lcd_draw_text(char_offset + 10, 0, "0db", COLOR_FG, COLOR_BG, 1);
-    lcd_draw_text(char_offset, 40, "-20db", COLOR_FG, COLOR_BG, 1);
-    lcd_draw_text(char_offset, 80, "-40db", COLOR_FG, COLOR_BG, 1);
-    lcd_draw_text(char_offset, 120, "-60db", COLOR_FG, COLOR_BG, 1);
-    lcd_draw_text(char_offset, 160, "-80db", COLOR_FG, COLOR_BG, 1);
-    lcd_draw_text(char_offset - 5, 200, "-100db", COLOR_FG, COLOR_BG, 1);
-    lcd_draw_text(0, 230, "<0~25KHz>", COLOR_FG, COLOR_BG, 1);
+    lcd_draw_text(SCREEN_WIDTH / 2 - 40, 5, "Spectrum analizer", COLOR_FG, COLOR_BG, 1);
+    lcd_draw_text(char_offset + 10, 0 + ver_offset - 3, "0db", COLOR_FG, COLOR_BG, 1);
+    lcd_draw_text(char_offset, 40 + ver_offset - 3, "-20db", COLOR_FG, COLOR_BG, 1);
+    lcd_draw_text(char_offset, 80 + ver_offset - 3, "-40db", COLOR_FG, COLOR_BG, 1);
+    lcd_draw_text(char_offset, 120 + ver_offset - 3, "-60db", COLOR_FG, COLOR_BG, 1);
+    lcd_draw_text(char_offset, 160 + ver_offset - 3, "-80db", COLOR_FG, COLOR_BG, 1);
+    lcd_draw_text(char_offset - 5, 200 + ver_offset - 3, "-100db", COLOR_FG, COLOR_BG, 1);
+    lcd_draw_text(SCREEN_WIDTH / 2, 230, "<0~25KHz>", COLOR_FG, COLOR_BG, 1);
     // X/Y line
-    lcd_draw_line(offset - 1, 0, offset - 1, SCREEN_HEIGHT - 1, COLOR_FG);
-    lcd_draw_line(offset - 1, SCREEN_HEIGHT - 1, SCREEN_WIDTH, SCREEN_HEIGHT - 1, COLOR_FG);
+    lcd_draw_line(hori_offset - 1, ver_offset, hori_offset - 1, SCREEN_HEIGHT - 1, COLOR_FG);
+    lcd_draw_line(hori_offset - 1, SCREEN_HEIGHT - 1, SCREEN_WIDTH, SCREEN_HEIGHT - 1, COLOR_FG);
 
     while (1)
     {
@@ -325,7 +327,7 @@ void core1_main()
         // to draw db reference lines
         for (int i = 0; i < 5; i++)
         {
-            lcd_draw_line(offset - 1, (SCREEN_HEIGHT / 6) * (i + 1), SCREEN_WIDTH, (SCREEN_HEIGHT / 6) * (i + 1), COLOR_LINE);
+            lcd_draw_line(hori_offset - 1, ver_offset + 40 * i, SCREEN_WIDTH, ver_offset + 40 * i, COLOR_LINE);
         }
     }
 }
