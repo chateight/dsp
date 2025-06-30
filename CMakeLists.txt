@@ -26,8 +26,6 @@ set(picotoolVersion 2.1.1)
 set(PICO_BOARD pico2_w CACHE STRING "Board type")
 
 set(PICO_SDK_PATH "$ENV{HOME}/pi/pico/pico-sdk")
-#set(PICO_SDK_PATH "/Users/usamiryuuichi/pi/pico/pico-sdk")
-
 
 # Pull in Raspberry Pi Pico SDK (must be before project)
 include(pico_sdk_import.cmake)
