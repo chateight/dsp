@@ -1,6 +1,6 @@
 /* See https://m0agx.eu/practical-fft-on-microcontrollers-using-cmsis-dsp.html */
 //
-// CPU reads ADC data version
+// Oscilloscope & Spectrum analizer CPU reads ADC data version
 //
 #include <math.h>
 #include <stdio.h>
@@ -39,6 +39,8 @@ void core1_main();
 
 int dma_chan; // not in use
 
+bool time_freq = 0;
+
 uint32_t start_adc_time;
 uint32_t start_preprocess_time;
 uint32_t start_fft_time;
@@ -55,15 +57,40 @@ q15_t filtered_downsampled[DOWNSAMPLED];
 
 // FFT結果（dB変換後の値 : dual buffer for display control）
 // Core0が更新する。Core1は読み取りのみ
-int16_t ffft_result_tmp[FFT_SIZE / 2];
+int16_t fft_result_tmp[FFT_SIZE / 2];
 volatile int16_t fft_result[2][FFT_SIZE / 2];
 volatile int non_active_index = 0;
 volatile int next = 0;
+
+// oscilloscope function
+#define OSC_SIZE 256
+int16_t adc_result_tmp[OSC_SIZE];
+volatile int16_t adc_result[2][OSC_SIZE];
 
 void __not_in_flash_func(adc_capture)(uint16_t *buf, size_t count)
 {
     adc_fifo_setup(true, false, 0, false, false);
     adc_run(true);
+    for (size_t i = 0; i < count; i = i + 1)
+        buf[i] = adc_fifo_get_blocking();
+    adc_run(false);
+    adc_fifo_drain();
+}
+
+void __not_in_flash_func(adc_capture_edge)(uint16_t *buf, size_t count)
+{
+    adc_fifo_setup(true, false, 0, false, false);
+    adc_run(true);
+
+    while (1)
+    {
+        int16_t edge_prev = adc_fifo_get_blocking();
+        int16_t edge_cur = adc_fifo_get_blocking();
+        if (edge_cur > (edge_prev + 3) * 10){   // consider edge_prev = zero
+            break;
+        }
+    }
+
     for (size_t i = 0; i < count; i = i + 1)
         buf[i] = adc_fifo_get_blocking();
     adc_run(false);
@@ -149,7 +176,7 @@ void fft_exec()
         float mag_corr = mag_q13 * hann_correction; // Hanning補正（約2倍）
 
         float voltage_rms = sqrtf(mag_corr);
-        ffft_result_tmp[j] = (int)20.0f * log10f(voltage_rms + 1e-5f);
+        fft_result_tmp[j] = (int)20.0f * log10f(voltage_rms + 1e-5f);
     }
 
     end_fft_time = time_us_32();
@@ -188,50 +215,68 @@ int main()
 
     // display buffer initialize
     memset((void *)fft_result, 0, sizeof(fft_result));
+    memset((void *)adc_result, 0, sizeof(adc_result));
 
-    // to prepare Hanning window coefficient
-    for (int n = 0; n < FFT_SIZE; n++)
+    if (time_freq == true)
     {
-        float hann = 0.5f * (1.0f - cosf(2.0f * M_PI * n / (FFT_SIZE - 1)));
-        hann_window[n] = (q15_t)(hann * 32767.0f);
-    }
-    // initialise FFT instance
-    arm_status status = arm_rfft_init_q15(&fft_instance, FFT_SIZE, 0, 1);
-
-    adc_initialize();
-
-    int disp_index = 0;
-
-    while (1)
-    {
-        adc_run(true);
-
-        start_adc_time = time_us_32();
-
-        adc_capture(capture_buf, RAW_SAMPLES);
-
-        start_preprocess_time = time_us_32();
-
-        adc_run(false);
-        filter_and_downsample();
-
-        //  LCD refresh is a sampling mode
-        if ((disp_index % FRAME_RATE) == 0)
+        // to prepare Hanning window coefficient
+        for (int n = 0; n < FFT_SIZE; n++)
         {
-            fft_exec();
-            disp_index = 0;
+            float hann = 0.5f * (1.0f - cosf(2.0f * M_PI * n / (FFT_SIZE - 1)));
+            hann_window[n] = (q15_t)(hann * 32767.0f);
+        }
+        // initialise FFT instance
+        arm_status status = arm_rfft_init_q15(&fft_instance, FFT_SIZE, 0, 1);
+
+        adc_initialize();
+
+        int disp_index = 0;
+
+        while (1)
+        {
+
+            start_adc_time = time_us_32();
+
+            adc_capture(capture_buf, RAW_SAMPLES);
+
+            start_preprocess_time = time_us_32();
+
+            filter_and_downsample();
+
+            //  LCD refresh is a sampling mode
+            if ((disp_index % FRAME_RATE) == 0)
+            {
+                fft_exec();
+                disp_index = 0;
+
+                // notify that the display data is available
+                uint32_t message = 1;
+                multicore_fifo_push_blocking(message);
+            }
+            else
+            {
+                disp_index++;
+            }
+        }
+        // wait forever(doesn't reach here)
+        __wfi();
+    }
+    else
+    {
+        adc_initialize();
+
+        while (1)
+        {
+
+            adc_capture_edge(adc_result_tmp, OSC_SIZE);
+
+            start_preprocess_time = time_us_32();
 
             // notify that the display data is available
-            uint32_t message = 9999;
+            uint32_t message = 0;
             multicore_fifo_push_blocking(message);
         }
-        else
-        {
-            disp_index++;
-        }
     }
-    // wait forever(doesn't reach here)
-    __wfi();
 
     //__BKPT(1);
 }
@@ -241,9 +286,9 @@ int main()
 #include "pico/stdlib.h"
 #include "lcd_st7789_library.h"
 #include "hardware/spi.h"
-
-#define SCREEN_WIDTH 310  // FFT result display area
-#define SCREEN_HEIGHT 220 // FFT result display area
+// for spectrum analizer
+#define SCREEN_WIDTH 310  // FFT result display area max
+#define SCREEN_HEIGHT 220 // FFT result display area max
 #define DB_MIN -100       // floor level
 #define DB_MAX 0
 #define COLOR_BG create_color(0, 0, 0)
@@ -284,6 +329,28 @@ void draw_fft_graph()
     }
 }
 
+int v_to_y(int adc_value)
+{
+    return (int)((1.0 - adc_value / 4096.0) * 40 * 3.3 + 1.7 * 40); // adc full equal 3.3V and 1.7 * 40 is a offset
+}
+
+// Oscilloscope waveform draw（差分のみ更新）
+void draw_osc_graph()
+{
+    for (int x = 0; x < OSC_SIZE; x++)
+    {
+        int y_new = v_to_y(adc_result[1 - non_active_index][x]);
+        int y_old = v_to_y(adc_result[non_active_index][x]);
+
+        if (y_new != y_old)
+        {
+            lcd_draw_pixel(x + hori_offset, y_old + ver_offset, COLOR_BG);
+
+            lcd_draw_pixel(x + hori_offset, y_new + ver_offset, COLOR_FG);
+        }
+    }
+}
+
 void core1_main()
 {
     stdio_init_all();
@@ -293,41 +360,83 @@ void core1_main()
     lcd_init();
     // to draw the display format
     lcd_fill_color(COLOR_BG);
-    // print level guide
-    lcd_draw_text(SCREEN_WIDTH / 2 - 40, 5, "Spectrum analizer", COLOR_FG, COLOR_BG, 1);
-    lcd_draw_text(char_offset + 10, 0 + ver_offset - 3, "0db", COLOR_FG, COLOR_BG, 1);
-    lcd_draw_text(char_offset, 40 + ver_offset - 3, "-20db", COLOR_FG, COLOR_BG, 1);
-    lcd_draw_text(char_offset, 80 + ver_offset - 3, "-40db", COLOR_FG, COLOR_BG, 1);
-    lcd_draw_text(char_offset, 120 + ver_offset - 3, "-60db", COLOR_FG, COLOR_BG, 1);
-    lcd_draw_text(char_offset, 160 + ver_offset - 3, "-80db", COLOR_FG, COLOR_BG, 1);
-    lcd_draw_text(char_offset - 5, 200 + ver_offset - 3, "-100db", COLOR_FG, COLOR_BG, 1);
-    lcd_draw_text(SCREEN_WIDTH / 2, 230, "<0~25KHz>", COLOR_FG, COLOR_BG, 1);
-    // X/Y line
-    lcd_draw_line(hori_offset - 1, ver_offset, hori_offset - 1, SCREEN_HEIGHT - 1, COLOR_FG);
-    lcd_draw_line(hori_offset - 1, SCREEN_HEIGHT - 1, SCREEN_WIDTH, SCREEN_HEIGHT - 1, COLOR_FG);
 
-    while (1)
+    if (time_freq == true)
     {
-        uint32_t data = multicore_fifo_pop_blocking();
+        // print level guide
+        lcd_draw_text(SCREEN_WIDTH / 2 - 40, 5, "Spectrum analizer", COLOR_FG, COLOR_BG, 1);
+        lcd_draw_text(char_offset + 10, 0 + ver_offset - 3, "0db", COLOR_FG, COLOR_BG, 1);
+        lcd_draw_text(char_offset, 40 + ver_offset - 3, "-20db", COLOR_FG, COLOR_BG, 1);
+        lcd_draw_text(char_offset, 80 + ver_offset - 3, "-40db", COLOR_FG, COLOR_BG, 1);
+        lcd_draw_text(char_offset, 120 + ver_offset - 3, "-60db", COLOR_FG, COLOR_BG, 1);
+        lcd_draw_text(char_offset, 160 + ver_offset - 3, "-80db", COLOR_FG, COLOR_BG, 1);
+        lcd_draw_text(char_offset - 5, 200 + ver_offset - 3, "-100db", COLOR_FG, COLOR_BG, 1);
+        lcd_draw_text(SCREEN_WIDTH / 2, 230, "<0~25KHz>", COLOR_FG, COLOR_BG, 1);
+        // X/Y line
+        lcd_draw_line(hori_offset - 1, ver_offset, hori_offset - 1, SCREEN_HEIGHT - 1, COLOR_FG);
+        lcd_draw_line(hori_offset - 1, SCREEN_HEIGHT - 1, SCREEN_WIDTH, SCREEN_HEIGHT - 1, COLOR_FG);
 
-        next = 1 - non_active_index;
-        // to move fft data to the display buffer
-        for (int i = 0; i < FFT_SIZE / 2; i++)
+        while (1)
         {
-            fft_result[next][i] = ffft_result_tmp[i];
+            uint32_t data = multicore_fifo_pop_blocking();
+
+            next = 1 - non_active_index;
+            // to move fft data to the display buffer
+            for (int i = 0; i < FFT_SIZE / 2; i++)
+            {
+                fft_result[next][i] = fft_result_tmp[i];
+            }
+
+            draw_fft_graph();
+
+            // change the dual buffer active one
+            non_active_index = next;
+
+            end_display_time = time_us_32();
+
+            // to draw db reference lines
+            for (int i = 0; i < 5; i++)
+            {
+                lcd_draw_line(hori_offset - 1, ver_offset + 40 * i, SCREEN_WIDTH, ver_offset + 40 * i, COLOR_LINE);
+            }
         }
-
-        draw_fft_graph();
-
-        // change the dual buffer active one
-        non_active_index = next;
-
-        end_display_time = time_us_32();
-
-        // to draw db reference lines
-        for (int i = 0; i < 5; i++)
+    }
+    else
+    { // print voltage guide
+        lcd_draw_text(SCREEN_WIDTH / 2 - 40, 5, "Oscilloscope", COLOR_FG, COLOR_BG, 1);
+        lcd_draw_text(char_offset + 20, 0 + ver_offset - 3, "5V", COLOR_FG, COLOR_BG, 1);
+        lcd_draw_text(char_offset + 20, 40 + ver_offset - 3, "4V", COLOR_FG, COLOR_BG, 1);
+        lcd_draw_text(char_offset + 20, 80 + ver_offset - 3, "3V", COLOR_FG, COLOR_BG, 1);
+        lcd_draw_text(char_offset + 20, 120 + ver_offset - 3, "2V", COLOR_FG, COLOR_BG, 1);
+        lcd_draw_text(char_offset + 20, 160 + ver_offset - 3, "1V", COLOR_FG, COLOR_BG, 1);
+        lcd_draw_text(char_offset + 20, 200 + ver_offset - 3, "0V", COLOR_FG, COLOR_BG, 1);
+        lcd_draw_text(SCREEN_WIDTH / 2, 230, "<500 mciro sec>", COLOR_FG, COLOR_BG, 1);
+        // X/Y line
+        lcd_draw_line(hori_offset - 1, ver_offset, hori_offset - 1, SCREEN_HEIGHT, COLOR_FG);
+        lcd_draw_line(hori_offset - 1, SCREEN_HEIGHT + 1, SCREEN_WIDTH, SCREEN_HEIGHT + 1, COLOR_FG);
+        while (1)
         {
-            lcd_draw_line(hori_offset - 1, ver_offset + 40 * i, SCREEN_WIDTH, ver_offset + 40 * i, COLOR_LINE);
+            uint32_t data = multicore_fifo_pop_blocking();
+
+            next = 1 - non_active_index;
+            // to move fft data to the display buffer
+            for (int i = 0; i < OSC_SIZE; i++)
+            {
+                adc_result[next][i] = adc_result_tmp[i];
+            }
+
+            draw_osc_graph();
+
+            // change the dual buffer active one
+            non_active_index = next;
+
+            end_display_time = time_us_32();
+
+            // to draw voltage reference lines
+            for (int i = 0; i < 5; i++)
+            {
+                lcd_draw_line(hori_offset - 1, ver_offset + 40 * i, SCREEN_WIDTH, ver_offset + 40 * i, COLOR_LINE);
+            }
         }
     }
 }
