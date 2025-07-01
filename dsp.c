@@ -38,7 +38,7 @@ void core1_main();
 #define CAPTURE_CHANNEL 0
 
 int dma_chan; // not in use
-
+// false : Oscilloscope, true : spectrum analizer 
 bool time_freq = 0;
 
 uint32_t start_adc_time;
@@ -86,7 +86,8 @@ void __not_in_flash_func(adc_capture_edge)(uint16_t *buf, size_t count)
     {
         int16_t edge_prev = adc_fifo_get_blocking();
         int16_t edge_cur = adc_fifo_get_blocking();
-        if (edge_cur > (edge_prev + 3) * 10){   // consider edge_prev = zero
+        if (edge_cur > (edge_prev + 3) * 10)
+        { // consider edge_prev = zero
             break;
         }
     }
@@ -331,7 +332,7 @@ void draw_fft_graph()
 
 int v_to_y(int adc_value)
 {
-    return (int)((1.0 - adc_value / 4096.0) * 40 * 3.3 + 1.7 * 40); // adc full equal 3.3V and 1.7 * 40 is a offset
+    return (int)((1.0 - adc_value / 4096.0) * 40 * 3.3 + 1.7 * 40); // adc full equal 3.3V and 1.7 * 40 is an offset
 }
 
 // Oscilloscope waveform draw（差分のみ更新）
@@ -345,7 +346,6 @@ void draw_osc_graph()
         if (y_new != y_old)
         {
             lcd_draw_pixel(x + hori_offset, y_old + ver_offset, COLOR_BG);
-
             lcd_draw_pixel(x + hori_offset, y_new + ver_offset, COLOR_FG);
         }
     }
