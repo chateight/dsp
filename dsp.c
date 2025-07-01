@@ -101,7 +101,7 @@ void __not_in_flash_func(adc_capture_edge)(uint16_t *buf, size_t count)
         }
     }
 
-    for (size_t i = 0; i < count; i = i + 1)
+    for (size_t i = 0; i < count; i++)
         buf[i] = adc_fifo_get_blocking();
     adc_run(false);
     adc_fifo_drain();
