@@ -374,7 +374,7 @@ void core1_main()
         lcd_draw_text(SCREEN_WIDTH / 2, 230, "<0~25KHz>", COLOR_FG, COLOR_BG, 1);
         // X/Y line
         lcd_draw_line(hori_offset - 1, ver_offset, hori_offset - 1, SCREEN_HEIGHT - 1, COLOR_FG);
-        lcd_draw_line(hori_offset - 1, SCREEN_HEIGHT - 1, SCREEN_WIDTH, SCREEN_HEIGHT - 1, COLOR_FG);
+        lcd_draw_line(hori_offset - 1, SCREEN_HEIGHT, SCREEN_WIDTH, SCREEN_HEIGHT, COLOR_FG);
 
         while (1)
         {
