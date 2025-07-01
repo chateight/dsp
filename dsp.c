@@ -38,7 +38,7 @@ void core1_main();
 #define CAPTURE_CHANNEL 0
 
 int dma_chan; // not in use
-// false : Oscilloscope, true : spectrum analizer 
+// false : Oscilloscope, true : spectrum analizer
 bool time_freq = 0;
 
 uint32_t start_adc_time;
@@ -82,13 +82,22 @@ void __not_in_flash_func(adc_capture_edge)(uint16_t *buf, size_t count)
     adc_fifo_setup(true, false, 0, false, false);
     adc_run(true);
 
+    int16_t time_loop = 0;
     while (1)
     {
-        int16_t edge_prev = adc_fifo_get_blocking();
-        int16_t edge_cur = adc_fifo_get_blocking();
-        if (edge_cur > (edge_prev + 3) * 10)
-        { // consider edge_prev = zero
+        if (time_loop == 10000) // time out or triger detection logic
+        {
+            time_loop++;
             break;
+        }
+        else
+        {
+            int16_t edge_prev = adc_fifo_get_blocking();
+            int16_t edge_cur = adc_fifo_get_blocking();
+            if (edge_cur > (edge_prev + 3) * 10)
+            { // consider edge_prev = zero
+                break;
+            }
         }
     }
 
