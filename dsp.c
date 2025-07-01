@@ -85,7 +85,7 @@ void __not_in_flash_func(adc_capture_edge)(uint16_t *buf, size_t count)
     int16_t time_loop = 0;
     while (1)
     {
-        if (time_loop == 1000) // time out or triger detection logic
+        if (time_loop == 1000) // time out or trigger detection logic
         {
             break;
         }
