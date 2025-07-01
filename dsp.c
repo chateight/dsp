@@ -85,13 +85,13 @@ void __not_in_flash_func(adc_capture_edge)(uint16_t *buf, size_t count)
     int16_t time_loop = 0;
     while (1)
     {
-        if (time_loop == 10000) // time out or triger detection logic
+        if (time_loop == 1000) // time out or triger detection logic
         {
-            time_loop++;
             break;
         }
         else
         {
+            time_loop++;
             int16_t edge_prev = adc_fifo_get_blocking();
             int16_t edge_cur = adc_fifo_get_blocking();
             if (edge_cur > (edge_prev + 3) * 10)
