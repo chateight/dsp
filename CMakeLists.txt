@@ -72,6 +72,7 @@ target_link_libraries(dsp
         hardware_timer 
         pico_multicore
         pico_cyw43_arch_none
+        hardware_i2c
 )
 
 target_link_libraries(lcd_driver

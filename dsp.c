@@ -25,6 +25,9 @@
 // LCD display control library
 #include "lcd_st7789_library.h"
 
+// for i2c device
+#include "hardware/i2c.h"
+
 void core1_main();
 
 #define FFT_SIZE 256 * 2
@@ -36,6 +39,15 @@ void core1_main();
 
 // Channel 0 is GPIO26 for ADC sampling
 #define CAPTURE_CHANNEL 0
+
+// i2c device port and pins
+#define I2C_PORT i2c0
+#define SDA_PIN 0
+#define SCL_PIN 1
+#define MCP4018_ADDR 0x2F
+
+// SPECTRUM OR OSCILLOSCOPE select pin
+#define SELECT_PIN 3
 
 int dma_chan; // not in use
 // false : Oscilloscope, true : spectrum analizer
@@ -66,6 +78,25 @@ volatile int next = 0;
 #define OSC_SIZE 256
 int16_t adc_result_tmp[OSC_SIZE];
 volatile int16_t adc_result[2][OSC_SIZE];
+
+// I2C initialize（100kHz）
+void setup_i2c()
+{
+    i2c_init(I2C_PORT, 100 * 1000); // set to 100KHz
+    gpio_set_function(SDA_PIN, GPIO_FUNC_I2C);
+    gpio_set_function(SCL_PIN, GPIO_FUNC_I2C);
+    gpio_pull_up(SDA_PIN);
+    gpio_pull_up(SCL_PIN);
+}
+
+void write_i2c(uint8_t val)
+{
+    uint8_t value = val;
+    // int ret = i2c_write_blocking(I2C_PORT, MCP4018_ADDR, NULL, 0, false);
+    int ret = i2c_write_blocking(I2C_PORT, MCP4018_ADDR, &value, 1, false);
+    if (ret == 1)
+        cyw43_arch_gpio_put(CYW43_WL_GPIO_LED_PIN, 1);
+}
 
 void __not_in_flash_func(adc_capture)(uint16_t *buf, size_t count)
 {
@@ -215,13 +246,26 @@ int main()
     stdio_init_all();
 
     cyw43_arch_init(); // debug purpose
-    cyw43_arch_gpio_put(CYW43_WL_GPIO_LED_PIN, 1);
+    cyw43_arch_gpio_put(CYW43_WL_GPIO_LED_PIN, 0);
 
     sleep_ms(1000);
     multicore_launch_core1(core1_main);
-    sleep_ms(1000);
+    sleep_ms(500);
 
+    // pwn enable
     setup_pwm();
+
+    // degital potentiometer initialize & set initial value
+    setup_i2c();
+    uint8_t val = 0x7f; // set wiper to max value
+    write_i2c(val);
+
+    // read SELECT-PIN status
+    gpio_init(SELECT_PIN);
+    gpio_set_dir(SELECT_PIN, GPIO_IN);
+    gpio_pull_up(SELECT_PIN);
+    sleep_ms(1);        // wait for stable condition (time constant when using internal pull up resistor)
+    time_freq = gpio_get(SELECT_PIN);
 
     // display buffer initialize
     memset((void *)fft_result, 0, sizeof(fft_result));
