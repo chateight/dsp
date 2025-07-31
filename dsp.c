@@ -8,6 +8,7 @@
 #include "pico/stdlib.h"
 #include "pico/time.h"
 #include "hardware/sync.h"
+#include "hardware/spi.h"
 
 // For ADC input
 #include "hardware/adc.h"
@@ -46,6 +47,15 @@ void core1_main();
 #define SCL_PIN 1
 #define MCP4018_ADDR 0x2F
 
+// SPI MCP4131 pin config
+#define SPI_PORT spi1
+#define PIN_SCK 14
+#define PIN_MOSI 15
+#define PIN_CS 13
+
+// MCP4131コマンド（0x00: write to pot 0）
+#define MCP4131_CMD_WRITE 0x00
+
 // SPECTRUM OR OSCILLOSCOPE select pin
 #define SELECT_PIN 3
 
@@ -79,6 +89,7 @@ volatile int next = 0;
 int16_t adc_result_tmp[OSC_SIZE];
 volatile int16_t adc_result[2][OSC_SIZE];
 
+/*
 // I2C initialize（100kHz）
 void setup_i2c()
 {
@@ -87,8 +98,21 @@ void setup_i2c()
     gpio_set_function(SCL_PIN, GPIO_FUNC_I2C);
     gpio_pull_up(SDA_PIN);
     gpio_pull_up(SCL_PIN);
+}*/
+
+void mcp4131_write(uint8_t value)
+{
+    uint8_t buf[2];
+    buf[0] = MCP4131_CMD_WRITE;
+    buf[1] = value;
+
+    // CS Low to start transmission
+    gpio_put(PIN_CS, 0);
+    spi_write_blocking(SPI_PORT, buf, 2);
+    gpio_put(PIN_CS, 1); // CS High to end transmission
 }
 
+/*
 void write_i2c(uint8_t val)
 {
     uint8_t value = val;
@@ -96,7 +120,7 @@ void write_i2c(uint8_t val)
     int ret = i2c_write_blocking(I2C_PORT, MCP4018_ADDR, &value, 1, false);
     if (ret == 1)
         cyw43_arch_gpio_put(CYW43_WL_GPIO_LED_PIN, 1);
-}
+}*/
 
 void __not_in_flash_func(adc_capture)(uint16_t *buf, size_t count)
 {
@@ -254,17 +278,30 @@ int main()
 
     // pwn enable
     setup_pwm();
+    /*
+        // degital potentiometer initialize & set initial value
+        setup_i2c();
+        uint8_t val = 0x7f; // set wiper to max value
+        write_i2c(val);*/
 
-    // degital potentiometer initialize & set initial value
-    setup_i2c();
-    uint8_t val = 0x7f; // set wiper to max value
-    write_i2c(val);
+    // SPI MCP4131 initialize
+    spi_init(SPI_PORT, 1000 * 1000); // 1 MHz
+    gpio_set_function(PIN_SCK, GPIO_FUNC_SPI);
+    gpio_set_function(PIN_MOSI, GPIO_FUNC_SPI);
+    // no MISO output（MCP4131）
+
+    gpio_init(PIN_CS);
+    gpio_set_dir(PIN_CS, GPIO_OUT);
+    gpio_put(PIN_CS, 1);
+
+    int16_t val_resi = 0x3f;
+    mcp4131_write(val_resi);
 
     // read SELECT-PIN status
     gpio_init(SELECT_PIN);
     gpio_set_dir(SELECT_PIN, GPIO_IN);
     gpio_pull_up(SELECT_PIN);
-    sleep_ms(1);        // wait for stable condition (time constant when using internal pull up resistor)
+    sleep_ms(1); // wait for stable condition (time constant when using internal pull up resistor)
     time_freq = gpio_get(SELECT_PIN);
 
     // display buffer initialize
@@ -352,6 +389,7 @@ int main()
 int hori_offset = 54;
 int char_offset = 10;
 int ver_offset = 20;
+int scale = 40;
 // y座標をdB値（-100～0）から画面の高さ（20～219）へマッピング（上が20）
 int db_to_y(int db_value)
 {
@@ -385,7 +423,7 @@ void draw_fft_graph()
 
 int v_to_y(int adc_value)
 {
-    return (int)((1.0 - adc_value / 4096.0) * 40 * 3.3 + 1.7 * 40); // adc full equal 3.3V and 1.7 * 40 is an offset
+    return (int)((1.0 - adc_value / 4095.0) * scale * 3.3 + (5.0 - 3.3) * scale); // adc full scale is 3.3V and 1.7 * 40 is an offset
 }
 
 // Oscilloscope waveform draw（差分のみ更新）
