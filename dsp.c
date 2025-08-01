@@ -58,6 +58,7 @@ void core1_main();
 
 // SPECTRUM OR OSCILLOSCOPE select pin
 #define SELECT_PIN 3
+#define ADC_MAX 4095
 
 int dma_chan; // not in use
 // false : Oscilloscope, true : spectrum analizer
@@ -147,8 +148,8 @@ void __not_in_flash_func(adc_capture_edge)(uint16_t *buf, size_t count)
         else
         {
             time_loop++;
-            int16_t edge_prev = adc_fifo_get_blocking();
-            int16_t edge_cur = adc_fifo_get_blocking();
+            int16_t edge_prev = ADC_MAX - adc_fifo_get_blocking();
+            int16_t edge_cur = ADC_MAX - adc_fifo_get_blocking();
             if (edge_cur > (edge_prev + 3) * 10)
             { // consider edge_prev = zero
                 break;
@@ -157,7 +158,7 @@ void __not_in_flash_func(adc_capture_edge)(uint16_t *buf, size_t count)
     }
 
     for (size_t i = 0; i < count; i++)
-        buf[i] = adc_fifo_get_blocking();
+        buf[i] = ADC_MAX - adc_fifo_get_blocking();
     adc_run(false);
     adc_fifo_drain();
 }
@@ -294,7 +295,7 @@ int main()
     gpio_set_dir(PIN_CS, GPIO_OUT);
     gpio_put(PIN_CS, 1);
 
-    int16_t val_resi = 0x3f;
+    int16_t val_resi = 0x3f;        // 0x3f : gain 6db, 0x7f : 0db
     mcp4131_write(val_resi);
 
     // read SELECT-PIN status
